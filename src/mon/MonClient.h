@@ -179,7 +179,7 @@ private:
   std::condition_variable map_cond;
   int authenticate_err;
 
-  list<Message*> waiting_for_session;
+  std::vector<Message*> waiting_for_session;
   Context *session_established_context;
   bool had_a_connection;
   double reopen_interval_multiplier;

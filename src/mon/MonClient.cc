@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "msg/Messenger.h"
@@ -418,12 +418,12 @@ void MonClient::shutdown()
     version_requests.erase(version_requests.begin());
   }
 
-  while (!waiting_for_session.empty()) {
+  for (auto m : waiting_for_session) {
     ldout(cct, 20) << __func__ << " discarding pending message "
-		   << *waiting_for_session.front() << dendl;
-    waiting_for_session.front()->put();
-    waiting_for_session.pop_front();
+		   << *m << dendl;
+    m->put();
   }
+  waiting_for_session.clear();
 
   l.unlock();
 
@@ -533,10 +533,9 @@ void MonClient::handle_auth(unique_lock& l, MAuthReply *m)
   if (ret == 0) {
     if (state != MC_STATE_HAVE_SESSION) {
       state = MC_STATE_HAVE_SESSION;
-      while (!waiting_for_session.empty()) {
-	_send_mon_message(waiting_for_session.front());
-	waiting_for_session.pop_front();
-      }
+      for (auto p : waiting_for_session)
+	_send_mon_message(p);
+      waiting_for_session.clear();
 
       _resend_mon_commands();
 
@@ -621,10 +620,10 @@ void MonClient::_reopen_session(int rank, string name)
 		 << dendl;
 
   // throw out old queued messages
-  while (!waiting_for_session.empty()) {
-    waiting_for_session.front()->put();
-    waiting_for_session.pop_front();
-  }
+  for (auto p : waiting_for_session)
+    p->put();
+
+  waiting_for_session.clear();
 
   // throw out version check requests
   while (!version_requests.empty()) {
