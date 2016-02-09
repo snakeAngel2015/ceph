@@ -284,7 +284,8 @@ noinst_HEADERS += \
 	common/align.h \
 	common/mutex_debug.h \
 	common/shunique_lock.h \
-	common/cxx_function.hpp
+	common/cxx_function.hpp \
+	common/waiter.h
 
 if ENABLE_XIO
 noinst_HEADERS += \
