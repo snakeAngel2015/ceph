@@ -4317,6 +4317,16 @@ int BlueStore::_txc_add_transaction(TransContext *txc, Transaction *t)
       }
       break;
 
+    case Transaction::OP_TRY_RENAME:
+      {
+        ghobject_t oldoid = i.get_oid(op->oid);
+        ghobject_t newoid = i.get_oid(op->dest_oid);
+	r = _rename(txc, c, oldoid, newoid);
+	if (r == -ENOENT)
+	  r = 0;
+      }
+      break;
+
     case Transaction::OP_COLL_SETATTR:
       r = -EOPNOTSUPP;
       break;
