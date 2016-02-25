@@ -2728,8 +2728,8 @@ void OSD::recursive_remove_collection(ObjectStore *store, spg_t pgid, coll_t tmp
     coll_t(),
     make_snapmapper_oid());
 
-  ceph::shared_ptr<ObjectStore::Sequencer> osr(
-    new ObjectStore::Sequencer("rm"));
+  ceph::shared_ptr<ObjectStore::Sequencer> osr (std::make_shared<
+                                      ObjectStore::Sequencer>("rm"));
   ObjectStore::Transaction t;
   SnapMapper mapper(&driver, 0, 0, 0, pgid.shard);
 
@@ -3278,6 +3278,10 @@ void OSD::build_past_intervals_parallel()
 
     // Verify same_interval_since is correct
     if (pg->info.history.same_interval_since) {
+      if (pg->info.history.same_interval_since != p.same_interval_since) {
+	dout(0) << __func__ << " history same_interval_since " << pg->info.history.same_interval_since << dendl;
+	dout(0) << __func__ << " same_interval_since " << p.same_interval_since << " pg " << *pg << dendl;
+      }
       assert(pg->info.history.same_interval_since == p.same_interval_since);
     } else {
       assert(p.same_interval_since);
@@ -5321,8 +5325,8 @@ void OSD::do_command(Connection *con, ceph_tid_t tid, vector<string>& cmd, buffe
     cmd_getval(cct, cmdmap, "object_size", osize, (int64_t)0);
     cmd_getval(cct, cmdmap, "object_num", onum, (int64_t)0);
 
-    ceph::shared_ptr<ObjectStore::Sequencer> osr(
-      new ObjectStore::Sequencer("bench"));
+    ceph::shared_ptr<ObjectStore::Sequencer> osr (std::make_shared<
+                                        ObjectStore::Sequencer>("bench"));
 
     uint32_t duration = g_conf->osd_bench_duration;
 

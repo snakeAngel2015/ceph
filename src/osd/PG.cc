@@ -196,7 +196,7 @@ PG::PG(OSDService *o, OSDMapRef curmap,
     _pool.id,
     p.shard),
   map_lock("PG::map_lock"),
-  osdmap_ref(curmap), pool(_pool),
+  osdmap_ref(curmap), last_persisted_osdmap_ref(curmap), pool(_pool),
   _lock("PG::_lock"),
   ref(0),
   #ifdef PG_DEBUG_REFS
@@ -234,8 +234,7 @@ PG::PG(OSDService *o, OSDMapRef curmap,
   acting_features(CEPH_FEATURES_SUPPORTED_DEFAULT),
   upacting_features(CEPH_FEATURES_SUPPORTED_DEFAULT),
   do_sort_bitwise(false),
-  last_epoch(0),
-  last_persisted_epoch(curmap->get_epoch())
+  last_epoch(0)
 {
 #ifdef PG_DEBUG_REFS
   osd->add_pgid(p, this);
@@ -2032,7 +2031,7 @@ void PG::all_activated_and_committed()
 
   queue_peering_event(
     CephPeeringEvtRef(
-      new CephPeeringEvt(
+      std::make_shared<CephPeeringEvt>(
         get_osdmap()->get_epoch(),
         get_osdmap()->get_epoch(),
         AllReplicasActivated())));
@@ -2735,8 +2734,8 @@ void PG::upgrade(ObjectStore *store)
   dirty_big_info = true;
   write_if_dirty(t);
 
-  ceph::shared_ptr<ObjectStore::Sequencer> osr(
-    new ObjectStore::Sequencer("upgrade"));
+  ceph::shared_ptr<ObjectStore::Sequencer> osr (std::make_shared<
+                                      ObjectStore::Sequencer>("upgrade"));
   int r = store->apply_transaction(osr.get(), std::move(t));
   if (r != 0) {
     derr << __func__ << ": apply_transaction returned "
@@ -2822,7 +2821,7 @@ void PG::prepare_write_info(map<string,bufferlist> *km)
   assert(ret == 0);
   if (need_update_epoch)
     last_epoch = get_osdmap()->get_epoch();
-  last_persisted_epoch = last_epoch;
+  last_persisted_osdmap_ref = osdmap_ref;
 
   dirty_info = false;
   dirty_big_info = false;
@@ -4507,7 +4506,7 @@ void PG::scrub_finish()
   if (has_error) {
     queue_peering_event(
       CephPeeringEvtRef(
-	new CephPeeringEvt(
+	std::make_shared<CephPeeringEvt>(
 	  get_osdmap()->get_epoch(),
 	  get_osdmap()->get_epoch(),
 	  DoRecovery())));
@@ -4816,8 +4815,8 @@ void PG::start_flush(ObjectStore::Transaction *t,
 		     list<Context *> *on_safe)
 {
   // flush in progress ops
-  FlushStateRef flush_trigger(
-    new FlushState(this, get_osdmap()->get_epoch()));
+  FlushStateRef flush_trigger (std::make_shared<FlushState>(
+                               this, get_osdmap()->get_epoch()));
   t->nop();
   flushes_in_progress++;
   on_applied->push_back(new ContainerContext<FlushStateRef>(flush_trigger));
@@ -5437,7 +5436,7 @@ void PG::queue_null(epoch_t msg_epoch,
 {
   dout(10) << "null" << dendl;
   queue_peering_event(
-    CephPeeringEvtRef(new CephPeeringEvt(msg_epoch, query_epoch,
+    CephPeeringEvtRef(std::make_shared<CephPeeringEvt>(msg_epoch, query_epoch,
 					 NullEvt())));
 }
 
@@ -5445,7 +5444,7 @@ void PG::queue_flushed(epoch_t e)
 {
   dout(10) << "flushed" << dendl;
   queue_peering_event(
-    CephPeeringEvtRef(new CephPeeringEvt(e, e,
+    CephPeeringEvtRef(std::make_shared<CephPeeringEvt>(e, e,
 					 FlushedEvt())));
 }
 
@@ -5455,7 +5454,7 @@ void PG::queue_query(epoch_t msg_epoch,
 {
   dout(10) << "handle_query " << q << " from replica " << from << dendl;
   queue_peering_event(
-    CephPeeringEvtRef(new CephPeeringEvt(msg_epoch, query_epoch,
+    CephPeeringEvtRef(std::make_shared<CephPeeringEvt>(msg_epoch, query_epoch,
 					 MQuery(from, q, query_epoch))));
 }
 
@@ -5486,15 +5485,15 @@ void PG::handle_activate_map(RecoveryCtx *rctx)
   dout(10) << "handle_activate_map " << dendl;
   ActMap evt;
   recovery_state.handle_event(evt, rctx);
-  if (osdmap_ref->get_epoch() - last_persisted_epoch >
+  if (osdmap_ref->get_epoch() - last_persisted_osdmap_ref->get_epoch() >
     cct->_conf->osd_pg_epoch_persisted_max_stale) {
     dout(20) << __func__ << ": Dirtying info: last_persisted is "
-	     << last_persisted_epoch
+	     << last_persisted_osdmap_ref->get_epoch()
 	     << " while current is " << osdmap_ref->get_epoch() << dendl;
     dirty_info = true;
   } else {
     dout(20) << __func__ << ": Not dirtying info: last_persisted is "
-	     << last_persisted_epoch
+	     << last_persisted_osdmap_ref->get_epoch()
 	     << " while current is " << osdmap_ref->get_epoch() << dendl;
   }
   if (osdmap_ref->check_new_blacklist_entries()) check_blacklisted_watchers();
